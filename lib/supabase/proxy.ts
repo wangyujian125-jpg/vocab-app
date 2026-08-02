@@ -41,7 +41,6 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // 只对 /protected 路径做登录检查，其他路径允许未登录访问
-  // 这样用户可以在离线模式下使用应用，登录后才启用云端同步
   if (
     request.nextUrl.pathname.startsWith("/protected") &&
     !user
