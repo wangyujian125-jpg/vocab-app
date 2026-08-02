@@ -1,0 +1,216 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 94%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+    --chart-1: 221 83% 53%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --radius: 0.625rem;
+  }
+  .dark {
+    --background: 222 47% 7%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 10%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 10%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 20%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 224 76% 48%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ============ 语境背词专用样式 ============ */
+
+/* 嵌入英文单词：蓝色 + 点线下划线 */
+.ctx-word {
+  color: #2563eb;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px dotted #93c5fd;
+  padding: 0 2px;
+  margin: 0 1px;
+  border-radius: 3px;
+  transition: background-color 0.15s ease;
+  display: inline-block;
+  line-height: 1.8;
+}
+.ctx-word:hover {
+  background-color: rgba(37, 99, 235, 0.1);
+}
+.ctx-word:active {
+  background-color: rgba(37, 99, 235, 0.2);
+}
+.dark .ctx-word {
+  color: #60a5fa;
+  border-bottom-color: rgba(96, 165, 250, 0.5);
+}
+.dark .ctx-word:hover {
+  background-color: rgba(96, 165, 250, 0.15);
+}
+
+/* 已加入生词本的单词 */
+.ctx-word.in-wrong {
+  color: #dc2626;
+  border-bottom-color: #fca5a5;
+}
+.dark .ctx-word.in-wrong {
+  color: #f87171;
+  border-bottom-color: rgba(248, 113, 113, 0.5);
+}
+
+/* 释义气泡 */
+.def-bubble {
+  position: fixed;
+  z-index: 9999;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  padding: 16px 20px;
+  min-width: 220px;
+  max-width: 320px;
+  animation: bubbleIn 0.15s ease-out;
+}
+.dark .def-bubble {
+  background: #1e293b;
+  border-color: #334155;
+}
+@keyframes bubbleIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.def-bubble .bubble-word {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #2563eb;
+}
+.dark .def-bubble .bubble-word {
+  color: #60a5fa;
+}
+.def-bubble .bubble-phonetic {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+.def-bubble .bubble-meaning {
+  font-size: 1rem;
+  color: #1e293b;
+  margin-top: 8px;
+  line-height: 1.6;
+}
+.dark .def-bubble .bubble-meaning {
+  color: #e2e8f0;
+}
+.def-bubble .bubble-pos {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #eff6ff;
+  color: #2563eb;
+  margin-left: 6px;
+}
+.dark .def-bubble .bubble-pos {
+  background: rgba(37, 99, 235, 0.2);
+}
+
+/* 段落阅读区 */
+.reading-area {
+  font-size: 1.15rem;
+  line-height: 2.2;
+  letter-spacing: 0.02em;
+  color: #1e293b;
+}
+.dark .reading-area {
+  color: #e2e8f0;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+/* 淡入动画 */
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 卡片悬浮效果 */
+.bank-card {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.bank-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+}
+.bank-card.selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
