@@ -14,6 +14,7 @@ import type {
   Pos,
 } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
+import { uploadWordImage } from '@/lib/supabase/queries';
 import type { User } from '@supabase/supabase-js';
 
 const STORE_KEY = 'vocab-store-v2';
@@ -111,6 +112,20 @@ export function VocabApp() {
   const [loaded, setLoaded] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
+
+  /* ---------- Storage: 单词配图 ---------- */
+  const [wordImages, setWordImages] = useState<Record<string, string>>({});
+  const [uploadingWord, setUploadingWord] = useState<string | null>(null);
+  const wordImageInputRef = useRef<HTMLInputElement>(null);
+  const pendingImageWord = useRef<string>('');
+
+  /* ---------- 语音输入 ---------- */
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const themes = useMemo(() => getThemeList(), []);
 
@@ -303,6 +318,113 @@ export function VocabApp() {
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /* ---------- Storage: 单词配图上传 ---------- */
+  const handleWordImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const word = pendingImageWord.current;
+    if (!file || !word) return;
+
+    if (!user) {
+      alert('请先登录后使用配图功能');
+      return;
+    }
+
+    setUploadingWord(word);
+    try {
+      const url = await uploadWordImage(word, file);
+      if (url) {
+        setWordImages(prev => ({ ...prev, [word]: url }));
+      } else {
+        alert('图片上传失败，请稍后重试');
+      }
+    } catch {
+      alert('图片上传失败');
+    } finally {
+      setUploadingWord(null);
+      pendingImageWord.current = '';
+      if (wordImageInputRef.current) wordImageInputRef.current.value = '';
+    }
+  };
+
+  const triggerWordImageUpload = (word: string) => {
+    pendingImageWord.current = word;
+    wordImageInputRef.current?.click();
+  };
+
+  /* ---------- 语音输入：录音 + 识别 ---------- */
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await transcribeAudio(audioBlob);
+      };
+
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+      setRecordingSeconds(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds(s => {
+          if (s >= 59) {
+            stopRecording();
+            return 60;
+          }
+          return s + 1;
+        });
+      }, 1000);
+    } catch {
+      alert('无法访问麦克风，请检查浏览器权限设置');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  };
+
+  const transcribeAudio = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'audio.webm');
+
+      const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (data.success && data.text) {
+        setImportText(prev => {
+          const trimmed = (prev || '').trim();
+          return trimmed ? `${trimmed}\n${data.text}` : data.text;
+        });
+      } else {
+        alert(data.error || '语音识别失败');
+      }
+    } catch {
+      alert('语音识别请求失败');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -797,25 +919,58 @@ export function VocabApp() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {wrongWords.map(w =>
-                  renderWordRow(
-                    w,
-                    <>
-                      <button
-                        onClick={() => speakWord(w.w)}
-                        className="rounded px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        朗读
-                      </button>
-                      <button
-                        onClick={() => removeFromWrong(w.w)}
-                        className="rounded px-2 py-1 text-xs text-red-500 transition hover:bg-red-50 dark:hover:bg-red-900/30"
-                      >
-                        移除
-                      </button>
-                    </>
-                  )
-                )}
+                {wrongWords.map(w => (
+                  <div
+                    key={w.w}
+                    className="rounded-lg border border-gray-100 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-blue-600 dark:text-blue-400">{w.w}</span>
+                          {w.ph && <span className="text-xs text-gray-400">{w.ph}</span>}
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] ${POS_COLOR[normalizePos(w.p)] || POS_COLOR.n}`}>
+                            {POS_LABEL[normalizePos(w.p)] || w.p}
+                          </span>
+                        </div>
+                        <div className="truncate text-sm text-gray-500 dark:text-gray-400">
+                          {primaryMeaning(w.m) || w.m}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          onClick={() => speakWord(w.w)}
+                          className="rounded px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          朗读
+                        </button>
+                        <button
+                          onClick={() => triggerWordImageUpload(w.w)}
+                          disabled={uploadingWord === w.w}
+                          className="rounded px-2 py-1 text-xs text-purple-600 transition hover:bg-purple-50 disabled:opacity-40 dark:text-purple-400 dark:hover:bg-purple-900/30"
+                        >
+                          {uploadingWord === w.w ? '上传中…' : '配图'}
+                        </button>
+                        <button
+                          onClick={() => removeFromWrong(w.w)}
+                          className="rounded px-2 py-1 text-xs text-red-500 transition hover:bg-red-50 dark:hover:bg-red-900/30"
+                        >
+                          移除
+                        </button>
+                      </div>
+                    </div>
+                    {wordImages[w.w] && (
+                      <div className="mt-2">
+                        <img
+                          src={wordImages[w.w]}
+                          alt={w.w}
+                          className="h-24 w-auto rounded-lg border border-gray-200 object-cover dark:border-gray-700"
+                          onClick={() => window.open(wordImages[w.w], '_blank')}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
 
@@ -850,14 +1005,36 @@ export function VocabApp() {
                 onChange={handleFileUpload}
                 className="hidden"
               />
-              <div className="mb-3 flex items-center gap-3">
+              <div className="mb-3 flex flex-wrap items-center gap-3">
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium transition hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700"
                 >
                   上传文件（.txt / .csv）
                 </button>
-                <span className="text-xs text-gray-400">或直接在下方粘贴</span>
+
+                {/* 语音输入按钮 */}
+                {isRecording ? (
+                  <button
+                    onClick={stopRecording}
+                    className="flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600"
+                  >
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                    录音中 {recordingSeconds}s · 点击停止
+                  </button>
+                ) : (
+                  <button
+                    onClick={startRecording}
+                    disabled={isTranscribing}
+                    className="flex items-center gap-2 rounded-lg border border-purple-300 px-4 py-2 text-sm font-medium text-purple-600 transition hover:bg-purple-50 disabled:opacity-40 dark:border-purple-700 dark:text-purple-400 dark:hover:bg-purple-900/30"
+                  >
+                    {isTranscribing ? '识别中…' : '🎤 语音输入'}
+                  </button>
+                )}
+
+                <span className="text-xs text-gray-400">
+                  {isRecording ? '说话结束后点击停止' : '或直接在下方粘贴'}
+                </span>
               </div>
               <textarea
                 value={importText}
@@ -909,6 +1086,15 @@ export function VocabApp() {
       </main>
 
       {renderBubble()}
+
+      {/* ---------- Hidden file input for word images ---------- */}
+      <input
+        ref={wordImageInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleWordImageUpload}
+        className="hidden"
+      />
     </div>
   );
 }

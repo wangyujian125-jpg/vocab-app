@@ -500,6 +500,122 @@ export async function saveProgress(progress: StudyProgress): Promise<boolean> {
   }
 }
 
+/* ============================================================
+ *  Storage（文件上传 - 单词配图）
+ * ============================================================ */
+
+const STORAGE_BUCKET = 'vocab-images';
+
+/**
+ * 上传单词配图到 Supabase Storage。
+ * @param word - 单词文本（用于生成文件路径）
+ * @param file - 图片文件
+ * @returns 图片公开 URL；失败返回 null
+ */
+export async function uploadWordImage(
+  word: string,
+  file: File
+): Promise<string | null> {
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const ext = file.name.split('.').pop() || 'png';
+    const filePath = `${user.id}/${word}-${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('[uploadWordImage] 上传失败:', uploadError.message);
+      return null;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(filePath);
+
+    return urlData?.publicUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 获取单词配图的公开 URL（如果存在）。
+ * @param word - 单词文本
+ * @returns 图片 URL 或 null
+ */
+export async function getWordImageUrl(
+  word: string
+): Promise<string | null> {
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .list(user.id, {
+        search: `${word}-`,
+        limit: 1,
+      });
+
+    if (error || !data || data.length === 0) return null;
+
+    const filePath = `${user.id}/${data[0].name}`;
+    const { data: urlData } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(filePath);
+
+    return urlData?.publicUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 删除单词配图。
+ * @param word - 单词文本
+ * @returns 成功返回 true，失败返回 false
+ */
+export async function deleteWordImage(word: string): Promise<boolean> {
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .list(user.id, {
+        search: `${word}-`,
+        limit: 1,
+      });
+
+    if (error || !data || data.length === 0) return false;
+
+    const filePath = `${user.id}/${data[0].name}`;
+    const { error: deleteError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .remove([filePath]);
+
+    return !deleteError;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * 获取今日的学习进度记录。
  * @returns StudyProgress 对象；今日无记录或出错时返回 null。

@@ -179,6 +179,32 @@ CREATE POLICY progress_delete_own ON progress
 
 
 -- ============================================================================
+-- Storage Bucket: vocab-images（单词配图存储）
+-- ============================================================================
+-- 在 Supabase Dashboard → Storage 中手动创建 bucket "vocab-images"（公开读），
+-- 或执行以下 SQL（需要 service_role 权限，在 SQL Editor 中运行）：
+
+-- INSERT INTO storage.buckets (id, name, public)
+-- VALUES ('vocab-images', 'vocab-images', true)
+-- ON CONFLICT (id) DO NOTHING;
+
+-- Bucket Policy: 每个登录用户只能管理自己 uid 文件夹下的图片
+-- DROP POLICY IF EXISTS "vocab-images-upload" ON storage.objects;
+-- CREATE POLICY "vocab-images-upload" ON storage.objects
+--     FOR INSERT TO authenticated
+--     WITH CHECK (bucket_id = 'vocab-images' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+-- DROP POLICY IF EXISTS "vocab-images-read" ON storage.objects;
+-- CREATE POLICY "vocab-images-read" ON storage.objects
+--     FOR SELECT USING (bucket_id = 'vocab-images');
+
+-- DROP POLICY IF EXISTS "vocab-images-delete" ON storage.objects;
+-- CREATE POLICY "vocab-images-delete" ON storage.objects
+--     FOR DELETE TO authenticated
+--     USING (bucket_id = 'vocab-images' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+
+-- ============================================================================
 -- Trigger: auto-update updated_at on the plans table
 -- ============================================================================
 CREATE OR REPLACE FUNCTION set_updated_at()
