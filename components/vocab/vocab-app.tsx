@@ -127,6 +127,10 @@ export function VocabApp() {
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  /* ---------- AI 段落生成 ---------- */
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiParagraph, setAiParagraph] = useState<GeneratedParagraph | null>(null);
+
   const themes = useMemo(() => getThemeList(), []);
 
   /* ---------- Supabase auth: check login state ---------- */
@@ -423,6 +427,34 @@ export function VocabApp() {
       alert('语音识别请求失败');
     } finally {
       setIsTranscribing(false);
+    }
+  };
+
+  /* ---------- AI 段落生成 ---------- */
+  const generateWithAI = async () => {
+    if (!dayPlan || dayPlan.words.length === 0) return;
+    setAiGenerating(true);
+    setAiParagraph(null);
+    try {
+      const res = await fetch('/api/generate-paragraph', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          words: dayPlan.words.map(w => ({ w: w.w, p: w.p, m: w.m, ph: w.ph })),
+          theme: themeId,
+          perDay,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.paragraph) {
+        setAiParagraph(data.paragraph);
+      } else {
+        alert(data.error || 'AI 生成失败，请检查是否已配置 DEEPSEEK_API_KEY');
+      }
+    } catch {
+      alert('AI 生成请求失败');
+    } finally {
+      setAiGenerating(false);
     }
   };
 
@@ -802,9 +834,29 @@ export function VocabApp() {
 
                 {/* paragraph */}
                 <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                  <h3 className="mb-3 text-base font-semibold text-blue-600 dark:text-blue-400">
-                    {dayPlan.paragraph.title}
-                  </h3>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-base font-semibold text-blue-600 dark:text-blue-400">
+                      {dayPlan.paragraph.title}
+                    </h3>
+                    <button
+                      onClick={generateWithAI}
+                      disabled={aiGenerating}
+                      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                        aiGenerating
+                          ? 'cursor-wait bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                          : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'
+                      }`}
+                    >
+                      {aiGenerating ? (
+                        <>
+                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          AI 生成中…
+                        </>
+                      ) : (
+                        <>✨ AI 生成段落</>
+                      )}
+                    </button>
+                  </div>
                   <p className="text-base leading-loose tracking-wide text-gray-800 dark:text-gray-100">
                     {renderParagraphText(dayPlan.paragraph, wrongWords, onWordClick)}
                   </p>
@@ -812,6 +864,32 @@ export function VocabApp() {
                     点击段落中的英文单词可查看释义并朗读。
                   </p>
                 </div>
+
+                {/* AI generated paragraph */}
+                {aiParagraph && (
+                  <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-blue-50 p-5 shadow-sm dark:border-purple-900/50 dark:from-purple-900/20 dark:to-blue-900/20">
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                        AI 生成
+                      </span>
+                      <h3 className="text-base font-semibold text-purple-600 dark:text-purple-400">
+                        {aiParagraph.title}
+                      </h3>
+                      <button
+                        onClick={() => setAiParagraph(null)}
+                        className="ml-auto rounded-lg px-2 py-1 text-xs text-gray-400 transition hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <p className="text-base leading-loose tracking-wide text-gray-800 dark:text-gray-100">
+                      {renderParagraphText(aiParagraph, wrongWords, onWordClick)}
+                    </p>
+                    <p className="mt-3 text-xs text-gray-400">
+                      由 DeepSeek AI 生成的段落，点击英文单词可查看释义。
+                    </p>
+                  </div>
+                )}
 
                 {/* day navigation */}
                 <div className="flex flex-wrap items-center gap-3">
